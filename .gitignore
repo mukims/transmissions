@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+venv/
+.env/
+*.egg-info/
+
+# Datasets (Do NOT track)
+data/
+*.pt
+*.pth
+*.h5
+*.npz
+*.mat
+*.csv
+
+# Model checkpoints
+models/
+checkpoints/
+*.pt
+*.pth
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+data/
+models/
+*.pt
+*.pth
