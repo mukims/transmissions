@@ -152,21 +152,27 @@ def unidevice(w, d, t, e, size, config, n, numberofunitcell, combs_fn=None):
 
     return mat
 
+
+
+
 def import_leads(size):
-    arr = np.load(os.path.expanduser(r"c:\Users\mukim\Downloads\transmissions\leads\agnr_7.npy"))
+    arr = np.load(os.path.expanduser(f"~/machine_learning/transmission_github/transmissions/leads/agnr_7.npy"))
+    #print(arr.shape)
     return arr
 
-
-
+g_7 = import_leads(7)
+print(g_7.shape)
 def device_transmission(w, d, t, e,size,config,concentration):
     ene = int(w*100)
     m = size    
 
-    g_7 = import_leads(size)
+    
+    global g_7
+#    print(g_7.shape)
 
 
-    left = g_7[0][ene]     # left lead surface Green's function
-    right = g_7[0][ene]     # right lead
+    left = g_7[ene]     # left lead surface Green's function
+    right = g_7[ene]     # right lead
 
     T  = connection(t,m)
 
@@ -212,6 +218,8 @@ def device_transmission(w, d, t, e,size,config,concentration):
 
     return tr1
 
+print(device_transmission(1,0.0001,1,0,7,1,0))
+
 def transmission(config, conc, size):
     trans = [device_transmission(i, 0.0001, 1, 0,size,config,conc) for i in np.arange(0,3,0.01)]
 
@@ -222,16 +230,73 @@ def transmission(config, conc, size):
 def run_transmission(args):
     config, conc, size = args
     return transmission(config, conc, size)   # must return shape (300,1)
-concs = np.arange(1, 50, 2)   # 1,3,5,...49
-nconfigs = 100
-nE = 300
 
-all_data = {}
 
-for conc in concs:
-    print("working on conc = {conc}")
-    conc_list = []
-    for cfg in range(nconfigs):
-        trans = transmission(cfg, conc,7)   # must return length 300
-        conc_list.append(trans)
-    all_data[conc] = np.array(conc_list)
+import numpy as np
+import os
+from multiprocessing import Pool, cpu_count
+from tqdm import tqdm
+
+# ----------------------------------------------------------
+# 1. Worker function — runs inside each process
+# ----------------------------------------------------------
+def compute_for_one_config(args):
+    cfg, conc, size = args
+
+    w_vals = np.arange(0, 3, 0.01)   # 300 energies
+    out = np.zeros(len(w_vals), dtype=float)
+
+    # Each worker loops over energies (RAM safe)
+    for i, w in enumerate(w_vals):
+        out[i] = device_transmission(w, 0.0001, 1, 0, size, cfg, conc)
+
+    return out
+
+
+# ----------------------------------------------------------
+# 2. Parallel execution for ONE concentration
+# ----------------------------------------------------------
+def compute_for_concentration(conc, size, nconfigs, out_dir):
+
+    print(f"\n[INFO] Starting conc = {conc}")
+    os.makedirs(out_dir, exist_ok=True)
+
+    args = [(cfg, conc, size) for cfg in range(nconfigs)]
+
+    # On Ubuntu: fork → memory is shared until modified (COW)
+    with Pool(processes=cpu_count()) as pool:
+        for cfg, result in enumerate(
+            tqdm(pool.imap(compute_for_one_config, args),
+                 total=nconfigs,
+                 desc=f"conc {conc}")
+        ):
+            # Save each config immediately → prevents RAM buildup
+            np.save(os.path.join(out_dir, f"7_agnr_conc{conc}_cfg{cfg}.npy"), result)
+
+
+# ----------------------------------------------------------
+# 3. Main driver
+# ----------------------------------------------------------
+def main():
+    concs = np.arange(1, 50, 2)  # [1,3,5,...,49]
+    nconfigs = 10000
+    size = 7
+
+    out_dir = os.path.expanduser("~/transmission_results")
+    os.makedirs(out_dir, exist_ok=True)
+
+    print(f"[INFO] Output directory: {out_dir}")
+    print(f"[INFO] Available CPU cores: {cpu_count()}")
+
+    for conc in concs:
+        compute_for_concentration(conc, size, nconfigs, out_dir)
+
+    print("\n[DONE] All concentrations complete!")
+
+
+# ----------------------------------------------------------
+# 4. IMPORTANT: Ubuntu does NOT require __main__
+# but it's still considered best practice.
+# ----------------------------------------------------------
+if __name__ == "__main__":
+    main()
